@@ -130,7 +130,7 @@ jobs:
               offending_path="$rel_path"
             elif [[ "$first_line" =~ ^([^:]+\.(kt|java|xml|gradle|kts|properties)):([0-9]+): ]]; then
               offending_path="${BASH_REMATCH[1]}"
-              line_no="${BASH_REMATCH[3]}"
+              line_no="${BASH_REMATCH[2]}"
               rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
               echo "::error file=${rel_path},line=${line_no}::${first_line}"
               offending_path="$rel_path"
@@ -202,9 +202,10 @@ jobs:
           offending_path=""
           line_no=""
           frame_line=""
+          classname=""
 
           if [[ -s unit-tests.stdout.log ]]; then
-            first_line=$(grep -m1 -E '^.+ > .+ FAILED$' unit-tests.stdout.log || true)
+            first_line=$(grep -m1 -E '^[[:space:]]*[[:alnum:]_.$]+[[:space:]]*>[[:space:]]+.+[[:space:]]+FAILED$' unit-tests.stdout.log || true)
           fi
           if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
             first_line=$(grep -m1 -E '(AssertionError|Exception|Error|FAILED)' unit-tests.stderr.log || true)
@@ -213,23 +214,57 @@ jobs:
             first_line=$(grep -m1 -E '(AssertionError|Exception|Error|FAILED)' unit-tests.stdout.log || true)
           fi
 
-          if [[ -s unit-tests.log ]]; then
-            frame_line=$(grep -m1 -E '^[[:space:]]*at com\.gz\.kidsafe\..+\(([^:]+\.(kt|java)):[0-9]+\)' unit-tests.log || true)
+          report_dir="app/build/test-results/testDebugUnitTest"
+          first_xml=""
+          if [[ -d "$report_dir" ]]; then
+            first_xml=$(grep -rl --include='TEST-*.xml' '<failure' "$report_dir" 2>/dev/null | head -n1)
+          fi
+
+          if [[ -n "$first_xml" ]]; then
+            testcase_line=$(awk '/<testcase /{tc=$0} /<failure/{print tc; exit}' "$first_xml")
+            failure_line=$(grep -m1 '<failure' "$first_xml" || true)
+            xml_class=$(echo "$testcase_line" | sed -n 's/.*classname="\([^"]*\)".*/\1/p')
+            xml_test=$(echo "$testcase_line" | sed -n 's/.*name="\([^"]*\)".*/\1/p')
+            xml_msg=$(echo "$failure_line" | sed -n 's/.*message="\([^"]*\)".*/\1/p')
+
+            if [[ -n "$xml_class" ]]; then
+              classname="$xml_class"
+            fi
+
+            if [[ -n "$xml_class" && -n "$xml_test" ]]; then
+              if [[ -n "$xml_msg" ]]; then
+                first_line="${xml_class} > ${xml_test} FAILED: ${xml_msg}"
+              elif [[ -z "$first_line" ]]; then
+                first_line="${xml_class} > ${xml_test} FAILED"
+              fi
+            fi
+
+            frame_line=$(grep -m1 -Eo 'at [[:alnum:]_.$]+\(([^:]+\.(kt|java)):[0-9]+\)' "$first_xml" || true)
+          fi
+
+          if [[ -z "$frame_line" && -s unit-tests.log ]]; then
+            frame_line=$(grep -m1 -E '^[[:space:]]*at [[:alnum:]_.$]+\(([^:]+\.(kt|java)):[0-9]+\)' unit-tests.log || true)
           fi
 
           if [[ -n "$frame_line" && "$frame_line" =~ \(([^:]+\.(kt|java)):([0-9]+)\) ]]; then
             file_name="${BASH_REMATCH[1]}"
-            line_no="${BASH_REMATCH[3]}"
-
+            line_no="${BASH_REMATCH[2]}"
             rel_path=$(find app/src/test app/src/androidTest app/src/main -type f -name "$file_name" 2>/dev/null | head -n1)
             if [[ -z "$rel_path" ]]; then
               rel_path="$file_name"
             fi
-
             offending_path="$rel_path"
-          elif [[ -n "$first_line" && "$first_line" =~ ^([^:]+\.(kt|java|kts|gradle|xml|properties)):([0-9]+): ]]; then
-            offending_path="${BASH_REMATCH[1]}"
-            line_no="${BASH_REMATCH[2]}"
+          fi
+
+          if [[ -z "$offending_path" && -n "$classname" ]]; then
+            base_class="${classname%%\$*}"
+            class_rel="${base_class//./\/}"
+            for candidate in "app/src/test/java/${class_rel}.kt" "app/src/test/java/${class_rel}.java" "app/src/main/java/${class_rel}.kt" "app/src/main/java/${class_rel}.java"; do
+              if [[ -f "$candidate" ]]; then
+                offending_path="$candidate"
+                break
+              fi
+            done
           fi
 
           if [[ -z "$first_line" ]]; then
