@@ -203,15 +203,64 @@ jobs:
           line_no=""
           frame_line=""
           classname=""
+          task_path=""
 
-          if [[ -s unit-tests.stdout.log ]]; then
-            first_line=$(grep -m1 -E '^[[:space:]]*[[:alnum:]_.$]+[[:space:]]*>[[:space:]]+.+[[:space:]]+FAILED$' unit-tests.stdout.log || true)
+          # Prefer compile/file-line signals from stderr/stdout over generic exception banners.
+          if [[ -s unit-tests.stderr.log ]]; then
+            first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' unit-tests.stderr.log || true)
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^e: .+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' unit-tests.stderr.log || true)
+            fi
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^[^[:space:]]+\.(kt|java|xml|gradle|kts|properties):[0-9]+(:[0-9]+)?(: error:|: )' unit-tests.stderr.log || true)
+            fi
           fi
+
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' unit-tests.stdout.log || true)
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^e: .+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' unit-tests.stdout.log || true)
+            fi
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^[^[:space:]]+\.(kt|java|xml|gradle|kts|properties):[0-9]+(:[0-9]+)?(: error:|: )' unit-tests.stdout.log || true)
+            fi
+          fi
+
+          # Next best: explicit failing task.
           if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
-            first_line=$(grep -m1 -E '(AssertionError|Exception|Error|FAILED)' unit-tests.stderr.log || true)
+            first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" unit-tests.stderr.log || true)
           fi
           if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
-            first_line=$(grep -m1 -E '(AssertionError|Exception|Error|FAILED)' unit-tests.stdout.log || true)
+            first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" unit-tests.stdout.log || true)
+          fi
+          if [[ -n "$first_line" && "$first_line" =~ ^Execution\ failed\ for\ task\ \'(:[^\']+)\' ]]; then
+            task_path="${BASH_REMATCH[1]}"
+          fi
+
+          # Then failing test summary line.
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '^[[:space:]]*[[:alnum:]_.$]+[[:space:]]*>[[:space:]]+.+[[:space:]]+FAILED$' unit-tests.stdout.log || true)
+          fi
+
+          # Script/build file failure lines.
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" unit-tests.stdout.log || true)
+          fi
+
+          # Structured exception/caused-by fallback (exclude bare '* Exception is:' noise).
+          if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
+            first_line=$(grep -m1 -E '(AssertionError|ComparisonFailure|Caused by:|java\.lang\.[[:alnum:]_$.]+:|kotlin\.[[:alnum:]_$.]+:)' unit-tests.stderr.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '(AssertionError|ComparisonFailure|Caused by:|java\.lang\.[[:alnum:]_$.]+:|kotlin\.[[:alnum:]_$.]+:)' unit-tests.stdout.log || true)
+          fi
+
+          if [[ "$first_line" == "* Exception is:" || "$first_line" == "Exception is:" ]]; then
+            first_line=""
+          fi
+
+          if [[ -n "$first_line" && "$first_line" =~ ^([[:alnum:]_.$]+)[[:space:]]*>[[:space:]] ]]; then
+            classname="${BASH_REMATCH[1]}"
           fi
 
           report_dir="app/build/test-results/testDebugUnitTest"
@@ -234,7 +283,7 @@ jobs:
             if [[ -n "$xml_class" && -n "$xml_test" ]]; then
               if [[ -n "$xml_msg" ]]; then
                 first_line="${xml_class} > ${xml_test} FAILED: ${xml_msg}"
-              elif [[ -z "$first_line" ]]; then
+              else
                 first_line="${xml_class} > ${xml_test} FAILED"
               fi
             fi
@@ -246,7 +295,27 @@ jobs:
             frame_line=$(grep -m1 -E '^[[:space:]]*at [[:alnum:]_.$]+\(([^:]+\.(kt|java)):[0-9]+\)' unit-tests.log || true)
           fi
 
-          if [[ -n "$frame_line" && "$frame_line" =~ \(([^:]+\.(kt|java)):([0-9]+)\) ]]; then
+          # Direct first_line path parsing.
+          if [[ "$first_line" =~ file:///([^:]+):([0-9]+):([0-9]+) ]]; then
+            offending_path="${BASH_REMATCH[1]}"
+            line_no="${BASH_REMATCH[2]}"
+            offending_path="${offending_path#${GITHUB_WORKSPACE}/}"
+          elif [[ "$first_line" =~ ^e:\ (.+\.(kt|java|kts|gradle|xml)):([0-9]+):([0-9]+) ]]; then
+            offending_path="${BASH_REMATCH[1]}"
+            line_no="${BASH_REMATCH[3]}"
+            offending_path="${offending_path#${GITHUB_WORKSPACE}/}"
+          elif [[ "$first_line" =~ ^([^:]+\.(kt|java|xml|gradle|kts|properties)):([0-9]+): ]]; then
+            offending_path="${BASH_REMATCH[1]}"
+            line_no="${BASH_REMATCH[2]}"
+            offending_path="${offending_path#${GITHUB_WORKSPACE}/}"
+          elif [[ "$first_line" =~ ^(Build|Settings|Script)\ file\ \'([^\']+)\'\ line:\ ([0-9]+) ]]; then
+            offending_path="${BASH_REMATCH[2]}"
+            line_no="${BASH_REMATCH[3]}"
+            offending_path="${offending_path#${GITHUB_WORKSPACE}/}"
+          fi
+
+          # Stack frame mapping.
+          if [[ -z "$offending_path" && -n "$frame_line" && "$frame_line" =~ \(([^:]+\.(kt|java)):([0-9]+)\) ]]; then
             file_name="${BASH_REMATCH[1]}"
             line_no="${BASH_REMATCH[2]}"
             rel_path=$(find app/src/test app/src/androidTest app/src/main -type f -name "$file_name" 2>/dev/null | head -n1)
@@ -256,15 +325,39 @@ jobs:
             offending_path="$rel_path"
           fi
 
+          # Classname-to-file mapping fallback.
           if [[ -z "$offending_path" && -n "$classname" ]]; then
             base_class="${classname%%\$*}"
             class_rel="${base_class//./\/}"
-            for candidate in "app/src/test/java/${class_rel}.kt" "app/src/test/java/${class_rel}.java" "app/src/main/java/${class_rel}.kt" "app/src/main/java/${class_rel}.java"; do
+            for candidate in \
+              "app/src/test/java/${class_rel}.kt" \
+              "app/src/test/java/${class_rel}.java" \
+              "app/src/main/java/${class_rel}.kt" \
+              "app/src/main/java/${class_rel}.java"; do
               if [[ -f "$candidate" ]]; then
                 offending_path="$candidate"
                 break
               fi
             done
+
+            if [[ -z "$offending_path" ]]; then
+              simple_class="${base_class##*.}"
+              rel_path=$(find app/src/test app/src/main -type f \( -name "${simple_class}.kt" -o -name "${simple_class}.java" \) 2>/dev/null | head -n1)
+              if [[ -n "$rel_path" ]]; then
+                offending_path="$rel_path"
+              fi
+            fi
+          fi
+
+          # Task-to-module mapping fallback.
+          if [[ -z "$offending_path" && -n "$task_path" ]]; then
+            if [[ "$task_path" == :app:* ]]; then
+              offending_path="app/build.gradle.kts"
+              line_no="1"
+            else
+              offending_path="build.gradle.kts"
+              line_no="1"
+            fi
           fi
 
           if [[ -z "$first_line" ]]; then
