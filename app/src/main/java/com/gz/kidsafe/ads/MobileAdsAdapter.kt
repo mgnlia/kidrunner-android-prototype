@@ -20,3 +20,17 @@ object GoogleMobileAdsAdapter : MobileAdsAdapter {
         }
     }
 }
+
+object NoOpMobileAdsAdapter : MobileAdsAdapter {
+    override fun setRequestConfiguration(configuration: RequestConfiguration) = Unit
+
+    override fun initialize(context: Context, onInitialized: () -> Unit) {
+        onInitialized()
+    }
+}
+
+object MobileAdsAdapterResolver {
+    fun resolve(realAdapterEnabled: Boolean): MobileAdsAdapter {
+        return if (realAdapterEnabled) GoogleMobileAdsAdapter else NoOpMobileAdsAdapter
+    }
+}
