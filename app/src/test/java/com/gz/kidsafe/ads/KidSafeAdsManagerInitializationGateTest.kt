@@ -1,7 +1,7 @@
 package com.gz.kidsafe.ads
 
 import android.content.Context
-import android.test.mock.MockContext
+import android.content.ContextWrapper
 import com.google.android.gms.ads.RequestConfiguration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -22,7 +22,7 @@ class KidSafeAdsManagerInitializationGateTest {
         val adapter = FakeMobileAdsAdapter()
 
         val decision = KidSafeAdsManager.initialize(
-            context = MockContext(),
+            context = testContext(),
             ageSignal = AgeSignal.CHILD_U13,
             adsEnabled = false,
             policyDeclarationsFinalized = true,
@@ -42,7 +42,7 @@ class KidSafeAdsManagerInitializationGateTest {
         val adapter = FakeMobileAdsAdapter()
 
         val decision = KidSafeAdsManager.initialize(
-            context = MockContext(),
+            context = testContext(),
             ageSignal = AgeSignal.CHILD_U13,
             adsEnabled = true,
             policyDeclarationsFinalized = true,
@@ -60,7 +60,7 @@ class KidSafeAdsManagerInitializationGateTest {
     @Test
     fun `allowed initialization is idempotent across repeated calls`() {
         val adapter = FakeMobileAdsAdapter()
-        val context = MockContext()
+        val context = testContext()
 
         val first = KidSafeAdsManager.initialize(
             context = context,
@@ -87,6 +87,8 @@ class KidSafeAdsManagerInitializationGateTest {
         assertEquals(1, adapter.setRequestConfigurationCount)
         assertEquals(1, adapter.initializeCount)
     }
+
+    private fun testContext(): Context = ContextWrapper(null)
 
     private class FakeMobileAdsAdapter : MobileAdsAdapter {
         var setRequestConfigurationCount: Int = 0
