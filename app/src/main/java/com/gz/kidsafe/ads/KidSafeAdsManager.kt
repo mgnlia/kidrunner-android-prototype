@@ -13,7 +13,8 @@ object KidSafeAdsManager {
         context: Context,
         ageSignal: AgeSignal = AgeSignal.UNKNOWN,
         policyDeclarationsFinalized: Boolean = BuildConfig.POLICY_DECLARATIONS_FINALIZED,
-        mobileAdsAdapter: MobileAdsAdapter = GoogleMobileAdsAdapter
+        realAdapterEnabled: Boolean = BuildConfig.MOBILE_ADS_REAL_ADAPTER_ENABLED,
+        mobileAdsAdapter: MobileAdsAdapter = MobileAdsAdapterResolver.resolve(realAdapterEnabled)
     ): AdEligibilityDecision {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = ageSignal,
@@ -30,7 +31,7 @@ object KidSafeAdsManager {
         if (initialized.compareAndSet(false, true)) {
             mobileAdsAdapter.setRequestConfiguration(AdPolicyConfig.requestConfiguration)
             mobileAdsAdapter.initialize(context) {
-                Log.i(TAG, "MobileAds initialized in kid-safe mode")
+                Log.i(TAG, "MobileAds initialized in kid-safe mode (realAdapterEnabled=$realAdapterEnabled)")
             }
         }
 
