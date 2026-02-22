@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "KidRunnerPrototype"
+rootProject.name = "KidSafePrototype"
 include(":app")

@@ -1,24 +1,37 @@
-# Android Prototype App (Track B Execution)
+# KidSafe Android Prototype (_07)
 
-This is the execution scaffold for the kids game prototype focused on:
-- fast playable loop
-- low-end performance
-- COPPA/Google Play Families compliant ad architecture by design
+Android prototype focused on **COPPA + Google Play Families compliance by design** and a safety-first AdMob integration.
 
-## Current implementation status
-- [x] Project skeleton (Gradle/Kotlin)
-- [x] Core game loop scaffolding (`SurfaceView` + fixed-step thread)
-- [x] Basic world update/render placeholders
-- [x] Kid-safe ad policy abstraction (`KidSafeAdPolicy`)
-- [x] Ad controller structure with no-ad fallback path (`KidSafeAdController`)
-- [ ] Core gameplay entities complete
-- [ ] Real Mobile Ads SDK wiring + integration test build
-- [ ] Internal APK smoke test run
+## What this includes
 
-## Package layout
-- `game/`: loop, world state, rendering, input hooks
-- `ads/`: kid-safe ad policy + integration controller
+- Kotlin Android app scaffold (`minSdk 24`, `targetSdk 34`)
+- Child-directed defaults enforced in code at startup
+- AdMob SDK integration with:
+  - Child-directed + under-age tags enabled
+  - Max content rating set to **G**
+  - Non-personalized ad request signal (`npa=1`)
+  - Runtime ad kill-switch (`BuildConfig.KIDSAFE_ADS_ENABLED`)
+- No dangerous permissions and attempt to remove AD_ID from merged manifest
+- A basic parental gate utility for any external-link surfaces
+- Policy and risk documentation in `docs/CHECKPOINT_24H.md`
 
-## Compliance design stance
-Default mode is **child-safe**. Any ad request path must pass policy checks first.
-If policy constraints are not met, the app falls back to **no-ad mode**.
+## Build
+
+```bash
+# From android-kidsafe-prototype/
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+```
+
+> Note: This repository is scaffolded in this environment and should be built in an Android SDK-enabled CI/local machine.
+
+## AdMob test IDs
+
+This prototype uses Google test ad unit IDs by default. Replace with production IDs only after policy review.
+
+## Key files
+
+- `app/src/main/java/com/gz/kidsafe/ads/AdPolicyConfig.kt`
+- `app/src/main/java/com/gz/kidsafe/ads/KidSafeAdsManager.kt`
+- `app/src/main/java/com/gz/kidsafe/MainActivity.kt`
+- `docs/CHECKPOINT_24H.md`

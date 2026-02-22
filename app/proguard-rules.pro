@@ -1,1 +1,1 @@
-# Prototype: keep default minimal rules.
+# Keep ad SDK classes as needed by default rules.

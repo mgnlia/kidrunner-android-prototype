@@ -1,18 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- INTERNET is needed for ad SDK/network in later phase; no ad requests are made unless policy allows -->
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Remove AD_ID unless explicitly approved after policy/legal review -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
 
     <application
-        android:allowBackup="true"
-        android:icon="@android:drawable/sym_def_app_icon"
-        android:label="KidRunner Prototype"
-        android:roundIcon="@android:drawable/sym_def_app_icon"
+        android:name=".KidSafeApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.KidRunnerPrototype">
+        android:theme="@style/Theme.KidSafePrototype"
+        android:usesCleartextTraffic="false"
+        tools:targetApi="31">
 
-        <!-- App-level placeholder. Replace with real AdMob app ID only when console setup is complete. -->
+        <!-- Google test app ID only. Replace for production release after policy review. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3940256099942544~3347511713" />
@@ -20,7 +26,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait">
+            android:theme="@style/Theme.KidSafePrototype">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
