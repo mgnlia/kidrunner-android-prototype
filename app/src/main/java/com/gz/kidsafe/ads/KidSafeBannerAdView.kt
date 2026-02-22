@@ -1,5 +1,6 @@
 package com.gz.kidsafe.ads
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -9,6 +10,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.gz.kidsafe.BuildConfig
+
+private const val TAG = "KidSafeBannerAdView"
 
 @Composable
 fun KidSafeBannerAdView(
@@ -23,7 +26,10 @@ fun KidSafeBannerAdView(
         policyFlagsValid = AdPolicyConfig.isStrictKidSafeConfigValid()
     )
 
-    if (!decision.allowed) return
+    if (!decision.allowed) {
+        Log.w(TAG, "Banner blocked by fail-closed guard (reason=${decision.blockReason})")
+        return
+    }
 
     val context = LocalContext.current
     val adView = remember(context) {
