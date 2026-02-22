@@ -12,6 +12,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.UNKNOWN,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = true
         )
@@ -25,6 +26,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.UNKNOWN,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = false,
             policyFlagsValid = true
         )
@@ -38,6 +40,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.UNKNOWN,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = false
         )
@@ -51,6 +54,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.UNKNOWN,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = false,
             policyFlagsValid = false
         )
@@ -64,6 +68,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.UNKNOWN,
             adsEnabled = false,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = true
         )
@@ -77,6 +82,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.CHILD_U13,
             adsEnabled = false,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = true
         )
@@ -86,10 +92,25 @@ class AdEligibilityGuardTest {
     }
 
     @Test
+    fun `mobile ads adapter disabled blocks ad serving`() {
+        val decision = AdEligibilityGuard.evaluate(
+            ageSignal = AgeSignal.CHILD_U13,
+            adsEnabled = true,
+            mobileAdsRealAdapterEnabled = false,
+            policyDeclarationsFinalized = true,
+            policyFlagsValid = true
+        )
+
+        assertFalse(decision.allowed)
+        assertEquals(AdBlockReason.MOBILE_ADS_ADAPTER_DISABLED, decision.blockReason)
+    }
+
+    @Test
     fun `policy declarations pending blocks ad serving`() {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.CHILD_U13,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = false,
             policyFlagsValid = true
         )
@@ -103,6 +124,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.CHILD_U13,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = false
         )
@@ -116,6 +138,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.CHILD_U13,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = true
         )
@@ -129,6 +152,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.TEEN_13_17,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = true
         )
@@ -142,6 +166,7 @@ class AdEligibilityGuardTest {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.ADULT_18_PLUS,
             adsEnabled = true,
+            mobileAdsRealAdapterEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = true
         )
