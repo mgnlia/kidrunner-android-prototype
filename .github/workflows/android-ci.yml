@@ -53,7 +53,6 @@ jobs:
 
           "${BUILD_TOOL[@]}" --version 2>&1 | tee gradle-version.log
 
-          # Some AGP paths still look for local.properties first; keep this deterministic.
           if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
             echo "sdk.dir=${ANDROID_SDK_ROOT}" > local.properties
           elif [[ -n "${ANDROID_HOME:-}" ]]; then
@@ -70,62 +69,53 @@ jobs:
           first_line=""
           offending_path=""
           line_no=""
-          build_context_line=""
 
-          if [[ -s assemble.stderr.log ]]; then
-            # Strong file+line signals first.
-            first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' assemble.stderr.log || true)
-            if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '^e: .+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' assemble.stderr.log || true)
-            fi
-            if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '^[^[:space:]]+\.(kt|java|xml|gradle|kts|properties):[0-9]+(:[0-9]+)?(: error:|: )' assemble.stderr.log || true)
-            fi
-
-            # Common deterministic Android/Gradle blockers.
-            if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E 'SDK location not found\.|local\.properties' assemble.stderr.log || true)
-            fi
-            if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E 'Failed to install the following Android SDK packages as some licences have not been accepted' assemble.stderr.log || true)
-            fi
-            if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '^Execution failed for task '\''(:[^'\'']+)'\''' assemble.stderr.log || true)
-            fi
-
-            # Generic but still actionable stderr fallback.
-            if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '(error|ERROR|failed|FAILED|Exception|exception)' assemble.stderr.log || true)
-            fi
-            if [[ -z "$first_line" ]]; then
-              first_line=$(awk 'NF {print; exit}' assemble.stderr.log)
-            fi
-          fi
-
-          if [[ -z "$first_line" && -s assemble.stdout.log ]]; then
-            build_context_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.stdout.log || true)
-            if [[ -n "$build_context_line" ]]; then
-              first_line="$build_context_line"
-            else
-              first_line=$(grep -m1 -E '^Execution failed for task '\''(:[^'\'']+)'\''' assemble.stdout.log || true)
+          if [[ "$status" -eq 0 ]]; then
+            first_line="ASSEMBLE_SUCCESS"
+            offending_path="none"
+          else
+            if [[ -s assemble.stderr.log ]]; then
+              first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' assemble.stderr.log || true)
+              if [[ -z "$first_line" ]]; then
+                first_line=$(grep -m1 -E '^e: .+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' assemble.stderr.log || true)
+              fi
+              if [[ -z "$first_line" ]]; then
+                first_line=$(grep -m1 -E '^[^[:space:]]+\.(kt|java|xml|gradle|kts|properties):[0-9]+(:[0-9]+)?(: error:|: )' assemble.stderr.log || true)
+              fi
+              if [[ -z "$first_line" ]]; then
+                first_line=$(grep -m1 -E 'SDK location not found\.|local\.properties' assemble.stderr.log || true)
+              fi
+              if [[ -z "$first_line" ]]; then
+                first_line=$(grep -m1 -E '^Execution failed for task '\''(:[^'\'']+)'\''' assemble.stderr.log || true)
+              fi
+              if [[ -z "$first_line" ]]; then
+                first_line=$(grep -m1 -E '(error|ERROR|failed|FAILED|Exception|exception)' assemble.stderr.log || true)
+              fi
+              if [[ -z "$first_line" ]]; then
+                first_line=$(awk 'NF {print; exit}' assemble.stderr.log)
+              fi
             fi
 
-            if [[ -z "$first_line" ]]; then
-              first_line=$(awk '/^\* What went wrong:/{flag=1;next} flag && NF {print; exit}' assemble.stdout.log)
+            if [[ -z "$first_line" && -s assemble.stdout.log ]]; then
+              first_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.stdout.log || true)
+              if [[ -z "$first_line" ]]; then
+                first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" assemble.stdout.log || true)
+              fi
+              if [[ -z "$first_line" ]]; then
+                first_line=$(awk '/^\* What went wrong:/{flag=1;next} flag && NF {print; exit}' assemble.stdout.log)
+              fi
+              if [[ -z "$first_line" ]]; then
+                first_line=$(grep -m1 -E '(error|ERROR|failed|FAILED|Exception|exception)' assemble.stdout.log || true)
+              fi
+              if [[ -z "$first_line" ]]; then
+                first_line=$(awk 'NF {print; exit}' assemble.stdout.log)
+              fi
             fi
-            if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '(error|ERROR|failed|FAILED|Exception|exception)' assemble.stdout.log || true)
-            fi
-            if [[ -z "$first_line" ]]; then
-              first_line=$(awk 'NF {print; exit}' assemble.stdout.log)
-            fi
-          fi
 
-          if [[ -z "$build_context_line" && -s assemble.stdout.log ]]; then
-            build_context_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.stdout.log || true)
-          fi
+            if [[ -z "$first_line" ]]; then
+              first_line="ASSEMBLE_FAILED_WITHOUT_MATCH"
+            fi
 
-          if [[ -n "$first_line" ]]; then
             if [[ "$first_line" =~ file:///([^:]+):([0-9]+):([0-9]+) ]]; then
               offending_path="${BASH_REMATCH[1]}"
               line_no="${BASH_REMATCH[2]}"
@@ -148,18 +138,6 @@ jobs:
               offending_path="local.properties"
               line_no="1"
               echo "::error file=local.properties,line=1::${first_line}"
-            elif [[ "$first_line" =~ ^(Build|Settings|Script)\ file\ \'([^\']+)\'\ line:\ ([0-9]+) ]]; then
-              offending_path="${BASH_REMATCH[2]}"
-              line_no="${BASH_REMATCH[3]}"
-              rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
-              echo "::error file=${rel_path},line=${line_no}::${first_line}"
-              offending_path="$rel_path"
-            elif [[ -n "$build_context_line" && "$build_context_line" =~ ^(Build|Settings|Script)\ file\ \'([^\']+)\'\ line:\ ([0-9]+) ]]; then
-              offending_path="${BASH_REMATCH[2]}"
-              line_no="${BASH_REMATCH[3]}"
-              rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
-              echo "::error file=${rel_path},line=${line_no}::${first_line} (context: ${build_context_line})"
-              offending_path="$rel_path"
             elif [[ "$first_line" =~ ^Execution\ failed\ for\ task\ \'(:[^\']+)\' ]]; then
               task_path="${BASH_REMATCH[1]}"
               if [[ "$task_path" == :app:* ]]; then
@@ -176,11 +154,6 @@ jobs:
               line_no="1"
               echo "::error file=.github/workflows/android-ci.yml,line=1::${first_line}"
             fi
-          else
-            first_line="NO_STDERR_OR_STDOUT_OUTPUT_FOUND"
-            offending_path=".github/workflows/android-ci.yml"
-            line_no="1"
-            echo "::error file=.github/workflows/android-ci.yml,line=1::${first_line}"
           fi
 
           {
@@ -193,15 +166,94 @@ jobs:
 
           exit "$status"
 
-      - name: Run Unit Tests
+      - name: Run Unit Tests (deterministic capture)
+        id: unit_tests
         if: steps.assemble.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
         run: |
-          set -o pipefail
+          set +e
+
           if [[ -x "./gradlew" ]]; then
-            ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee unit-tests.log
+            BUILD_TOOL=(./gradlew)
           else
-            gradle :app:testDebugUnitTest --stacktrace 2>&1 | tee unit-tests.log
+            BUILD_TOOL=(gradle)
           fi
+
+          "${BUILD_TOOL[@]}" :app:testDebugUnitTest --stacktrace --console=plain \
+            > >(tee unit-tests.stdout.log) \
+            2> >(tee unit-tests.stderr.log >&2)
+          status=$?
+
+          cat unit-tests.stdout.log unit-tests.stderr.log > unit-tests.log
+
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+
+          exit "$status"
+
+      - name: Extract first actionable unit-test failure line
+        id: unit_extract
+        if: steps.assemble.outputs.exit_code == '0' && steps.unit_tests.outputs.exit_code != '0'
+        shell: bash
+        run: |
+          set +e
+
+          first_line=""
+          offending_path=""
+          line_no=""
+          frame_line=""
+
+          if [[ -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '^.+ > .+ FAILED$' unit-tests.stdout.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
+            first_line=$(grep -m1 -E '(AssertionError|Exception|Error|FAILED)' unit-tests.stderr.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '(AssertionError|Exception|Error|FAILED)' unit-tests.stdout.log || true)
+          fi
+
+          if [[ -s unit-tests.log ]]; then
+            frame_line=$(grep -m1 -E '^[[:space:]]*at com\.gz\.kidsafe\..+\(([^:]+\.(kt|java)):[0-9]+\)' unit-tests.log || true)
+          fi
+
+          if [[ -n "$frame_line" && "$frame_line" =~ \(([^:]+\.(kt|java)):([0-9]+)\) ]]; then
+            file_name="${BASH_REMATCH[1]}"
+            line_no="${BASH_REMATCH[3]}"
+
+            rel_path=$(find app/src/test app/src/androidTest app/src/main -type f -name "$file_name" 2>/dev/null | head -n1)
+            if [[ -z "$rel_path" ]]; then
+              rel_path="$file_name"
+            fi
+
+            offending_path="$rel_path"
+          elif [[ -n "$first_line" && "$first_line" =~ ^([^:]+\.(kt|java|kts|gradle|xml|properties)):([0-9]+): ]]; then
+            offending_path="${BASH_REMATCH[1]}"
+            line_no="${BASH_REMATCH[2]}"
+          fi
+
+          if [[ -z "$first_line" ]]; then
+            first_line="UNIT_TEST_FAILED_WITHOUT_MATCH"
+          fi
+
+          if [[ -z "$offending_path" ]]; then
+            offending_path="app/src/test"
+            line_no="1"
+          fi
+
+          echo "::error file=${offending_path},line=${line_no:-1}::${first_line}"
+
+          {
+            echo "offending_path=${offending_path}"
+            echo "first_actionable_line<<EOF"
+            echo "$first_line"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fail job when unit tests fail
+        if: steps.assemble.outputs.exit_code == '0' && steps.unit_tests.outputs.exit_code != '0'
+        shell: bash
+        run: exit 1
 
       - name: Upload CI logs
         if: always()
@@ -215,4 +267,6 @@ jobs:
             assemble.stdout.log
             assemble.stderr.log
             assemble.log
+            unit-tests.stdout.log
+            unit-tests.stderr.log
             unit-tests.log
