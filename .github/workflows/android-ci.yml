@@ -30,7 +30,22 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Assemble Debug
-        run: gradle --version && gradle assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          gradle --version
+          gradle assembleDebug --stacktrace 2>&1 | tee assemble.log
 
       - name: Run Unit Tests
-        run: gradle testDebugUnitTest --stacktrace
+        run: |
+          set -o pipefail
+          gradle testDebugUnitTest --stacktrace 2>&1 | tee unit-tests.log
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-ci-logs
+          if-no-files-found: warn
+          path: |
+            assemble.log
+            unit-tests.log
