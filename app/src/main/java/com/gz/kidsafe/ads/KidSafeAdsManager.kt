@@ -41,7 +41,7 @@ object KidSafeAdsManager {
                     details = "ageSignal=$ageSignal"
                 )
             }
-            Log.w(TAG, "Ads initialization blocked (reason=${decision.blockReason})")
+            safeLogWarn("Ads initialization blocked (reason=${decision.blockReason})")
             return decision
         }
 
@@ -53,11 +53,19 @@ object KidSafeAdsManager {
         if (initialized.compareAndSet(false, true)) {
             mobileAdsAdapter.setRequestConfiguration(AdPolicyConfig.requestConfiguration)
             mobileAdsAdapter.initialize(context) {
-                Log.i(TAG, "MobileAds initialized in kid-safe mode (realAdapterEnabled=$realAdapterEnabled)")
+                safeLogInfo("MobileAds initialized in kid-safe mode (realAdapterEnabled=$realAdapterEnabled)")
             }
         }
 
         return decision
+    }
+
+    private fun safeLogWarn(message: String) {
+        runCatching { Log.w(TAG, message) }
+    }
+
+    private fun safeLogInfo(message: String) {
+        runCatching { Log.i(TAG, message) }
     }
 
     internal fun resetForTests() {
