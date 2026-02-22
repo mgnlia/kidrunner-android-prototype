@@ -40,6 +40,8 @@ jobs:
 
           first_line=""
           offending_path=""
+          line_no=""
+          build_context_line=""
 
           if [[ -s assemble.log ]]; then
             # Kotlin/JVM compiler actionable lines.
@@ -56,14 +58,37 @@ jobs:
               first_line=$(grep -m1 -E '^AAPT: error:' assemble.log || true)
             fi
 
-            # Deterministic fallback when no file-line match was produced.
+            # Kotlin Gradle script compile failures (e.g. build.gradle.kts:line:col)
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^e: .+\.gradle\.kts:[0-9]+:[0-9]+' assemble.log || true)
+            fi
+
+            # Gradle script file/line declaration.
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.log || true)
+            fi
+
+            # Deterministic fallback when task execution line is available.
             if [[ -z "$first_line" ]]; then
               first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" assemble.log || true)
             fi
+
+            # Last-resort fallback: first message under '* What went wrong:'
+            if [[ -z "$first_line" ]]; then
+              first_line=$(awk '/^\* What went wrong:/{flag=1;next} flag && NF {print; exit}' assemble.log)
+            fi
+
+            build_context_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.log || true)
           fi
 
           if [[ -n "$first_line" ]]; then
             if [[ "$first_line" =~ file:///([^:]+):([0-9]+):([0-9]+) ]]; then
+              offending_path="${BASH_REMATCH[1]}"
+              line_no="${BASH_REMATCH[2]}"
+              rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
+              echo "::error file=${rel_path},line=${line_no}::${first_line}"
+              offending_path="$rel_path"
+            elif [[ "$first_line" =~ ^e:\ (.+\.gradle\.kts):([0-9]+):([0-9]+) ]]; then
               offending_path="${BASH_REMATCH[1]}"
               line_no="${BASH_REMATCH[2]}"
               rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
@@ -75,9 +100,21 @@ jobs:
               rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
               echo "::error file=${rel_path},line=${line_no}::${first_line}"
               offending_path="$rel_path"
-            elif [[ "$first_line" =~ ^([^:]+\.(kt|java|xml)): ]]; then
-              offending_path="${BASH_REMATCH[1]}"
-              echo "::error file=${offending_path}::${first_line}"
+            elif [[ "$first_line" =~ ^(Build|Settings|Script)\ file\ \'([^\']+)\'\ line:\ ([0-9]+) ]]; then
+              offending_path="${BASH_REMATCH[2]}"
+              line_no="${BASH_REMATCH[3]}"
+              rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
+              echo "::error file=${rel_path},line=${line_no}::${first_line}"
+              offending_path="$rel_path"
+            elif [[ -n "$build_context_line" && "$build_context_line" =~ ^(Build|Settings|Script)\ file\ \'([^\']+)\'\ line:\ ([0-9]+) ]]; then
+              offending_path="${BASH_REMATCH[2]}"
+              line_no="${BASH_REMATCH[3]}"
+              rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
+              echo "::error file=${rel_path},line=${line_no}::${first_line} (context: ${build_context_line})"
+              offending_path="$rel_path"
+            elif [[ "$first_line" =~ ^Execution\ failed\ for\ task\ \'(:[^\']+)\' ]]; then
+              offending_path="task${BASH_REMATCH[1]}"
+              echo "::error title=AssembleDebug task failure::${first_line}"
             else
               offending_path="module:unknown"
               echo "::error title=AssembleDebug deterministic failure::${first_line}"
