@@ -29,13 +29,61 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Assemble Debug
+      - name: Assemble Debug (deterministic stderr capture)
+        id: assemble
+        shell: bash
         run: |
-          set -o pipefail
-          gradle --version
+          set +e
+          gradle --version 2>&1 | tee gradle-version.log
           gradle assembleDebug --stacktrace 2>&1 | tee assemble.log
+          status=${PIPESTATUS[0]}
+
+          first_line=""
+          offending_path=""
+
+          if [[ -s assemble.log ]]; then
+            first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java):[0-9]+:[0-9]+' assemble.log || true)
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^.+\.(kt|java):[0-9]+: error:' assemble.log || true)
+            fi
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" assemble.log || true)
+            fi
+          fi
+
+          if [[ -n "$first_line" ]]; then
+            if [[ "$first_line" =~ file:///([^:]+):([0-9]+):([0-9]+) ]]; then
+              offending_path="${BASH_REMATCH[1]}"
+              line_no="${BASH_REMATCH[2]}"
+              rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
+              echo "::error file=${rel_path},line=${line_no}::${first_line}"
+              offending_path="$rel_path"
+            elif [[ "$first_line" =~ ^([^:]+\.(kt|java)):([0-9]+): ]]; then
+              offending_path="${BASH_REMATCH[1]}"
+              line_no="${BASH_REMATCH[3]}"
+              echo "::error file=${offending_path},line=${line_no}::${first_line}"
+            else
+              offending_path="module:unknown"
+              echo "::error title=AssembleDebug deterministic failure::${first_line}"
+            fi
+          else
+            first_line="NO_ACTIONABLE_STDERR_LINE_FOUND"
+            offending_path="module:unknown"
+            echo "::error::No actionable stderr line matched in assemble.log"
+          fi
+
+          {
+            echo "exit_code=${status}"
+            echo "offending_path=${offending_path}"
+            echo "first_actionable_line<<EOF"
+            echo "$first_line"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          exit "$status"
 
       - name: Run Unit Tests
+        if: steps.assemble.outputs.exit_code == '0'
         run: |
           set -o pipefail
           gradle testDebugUnitTest --stacktrace 2>&1 | tee unit-tests.log
@@ -47,5 +95,6 @@ jobs:
           name: android-ci-logs
           if-no-files-found: warn
           path: |
+            gradle-version.log
             assemble.log
             unit-tests.log
