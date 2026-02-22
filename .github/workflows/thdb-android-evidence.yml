@@ -1,0 +1,36 @@
+name: THDB Android Evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "scripts/thdb_collect_evidence.sh"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - ".github/workflows/thdb-android-evidence.yml"
+
+jobs:
+  evidence:
+    name: compile-runtime-manifest-proof
+    runs-on: self-hosted
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure evidence script is executable
+        run: chmod +x scripts/thdb_collect_evidence.sh
+
+      - name: Collect compile/runtime/manifest evidence
+        run: scripts/thdb_collect_evidence.sh
+
+      - name: Upload THDB evidence artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: thdb-evidence-${{ github.sha }}
+          path: artifacts/thdb/**
+          if-no-files-found: error
