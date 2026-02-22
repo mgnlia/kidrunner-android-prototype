@@ -1,6 +1,5 @@
 package com.gz.kidsafe.ads
 
-import com.google.ads.mediation.admob.AdMobAdapter
 import com.google.android.gms.ads.RequestConfiguration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -28,9 +27,8 @@ class AdPolicyConfigTest {
     }
 
     @Test
-    fun `ad requests are non-personalized`() {
-        val request = AdPolicyConfig.buildNonPersonalizedAdRequest()
-        val extras = request.getNetworkExtrasBundle(AdMobAdapter::class.java)
-        assertEquals("1", extras?.getString("npa"))
+    fun `ad request extras are non-personalized`() {
+        val extras = AdPolicyConfig.nonPersonalizedRequestExtras()
+        assertEquals("1", extras["npa"])
     }
 }

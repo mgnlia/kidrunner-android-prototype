@@ -12,6 +12,9 @@ object AdPolicyConfig {
     const val TAG_FOR_UNDER_AGE_OF_CONSENT = RequestConfiguration.TAG_FOR_UNDER_AGE_OF_CONSENT_TRUE
     const val MAX_AD_CONTENT_RATING = RequestConfiguration.MAX_AD_CONTENT_RATING_G
 
+    const val NON_PERSONALIZED_EXTRAS_KEY = "npa"
+    const val NON_PERSONALIZED_EXTRAS_VALUE = "1"
+
     val requestConfiguration: RequestConfiguration =
         RequestConfiguration.Builder()
             .setTagForChildDirectedTreatment(TAG_FOR_CHILD_DIRECTED_TREATMENT)
@@ -25,9 +28,15 @@ object AdPolicyConfig {
             MAX_AD_CONTENT_RATING == RequestConfiguration.MAX_AD_CONTENT_RATING_G
     }
 
+    /**
+     * JVM-safe representation used by unit tests; Android Bundle conversion happens at request-build time.
+     */
+    fun nonPersonalizedRequestExtras(): Map<String, String> =
+        mapOf(NON_PERSONALIZED_EXTRAS_KEY to NON_PERSONALIZED_EXTRAS_VALUE)
+
     fun buildNonPersonalizedAdRequest(): AdRequest {
         val extras = Bundle().apply {
-            putString("npa", "1")
+            nonPersonalizedRequestExtras().forEach { (key, value) -> putString(key, value) }
         }
 
         return AdRequest.Builder()
