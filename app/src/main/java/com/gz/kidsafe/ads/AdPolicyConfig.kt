@@ -19,6 +19,12 @@ object AdPolicyConfig {
             .setMaxAdContentRating(MAX_AD_CONTENT_RATING)
             .build()
 
+    fun isStrictKidSafeConfigValid(): Boolean {
+        return TAG_FOR_CHILD_DIRECTED_TREATMENT == RequestConfiguration.TAG_FOR_CHILD_DIRECTED_TREATMENT_TRUE &&
+            TAG_FOR_UNDER_AGE_OF_CONSENT == RequestConfiguration.TAG_FOR_UNDER_AGE_OF_CONSENT_TRUE &&
+            MAX_AD_CONTENT_RATING == RequestConfiguration.MAX_AD_CONTENT_RATING_G
+    }
+
     fun buildNonPersonalizedAdRequest(): AdRequest {
         val extras = Bundle().apply {
             putString("npa", "1")
