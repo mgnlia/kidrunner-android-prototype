@@ -19,7 +19,11 @@ android {
             useSupportLibrary = true
         }
 
+        // Fail-closed defaults. Do not relax before policy task finalization.
         buildConfigField("boolean", "KIDSAFE_ADS_ENABLED", "true")
+        buildConfigField("boolean", "POLICY_DECLARATIONS_FINALIZED", "false")
+        buildConfigField("boolean", "ADMOB_PROD_IDS_APPROVED", "false")
+        buildConfigField("String", "ADMOB_BANNER_AD_UNIT_ID", "\"\"")
     }
 
     buildTypes {
