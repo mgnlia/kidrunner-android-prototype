@@ -34,6 +34,45 @@ class AdEligibilityGuardTest {
     }
 
     @Test
+    fun `unknown age remains blocked even when policy flags are invalid`() {
+        val decision = AdEligibilityGuard.evaluate(
+            ageSignal = AgeSignal.UNKNOWN,
+            adsEnabled = true,
+            policyDeclarationsFinalized = true,
+            policyFlagsValid = false
+        )
+
+        assertFalse(decision.allowed)
+        assertEquals(AdBlockReason.AGE_UNKNOWN, decision.blockReason)
+    }
+
+    @Test
+    fun `unknown age remains blocked when declarations are pending and policy flags are invalid`() {
+        val decision = AdEligibilityGuard.evaluate(
+            ageSignal = AgeSignal.UNKNOWN,
+            adsEnabled = true,
+            policyDeclarationsFinalized = false,
+            policyFlagsValid = false
+        )
+
+        assertFalse(decision.allowed)
+        assertEquals(AdBlockReason.AGE_UNKNOWN, decision.blockReason)
+    }
+
+    @Test
+    fun `ads disabled blocks before unknown age check`() {
+        val decision = AdEligibilityGuard.evaluate(
+            ageSignal = AgeSignal.UNKNOWN,
+            adsEnabled = false,
+            policyDeclarationsFinalized = true,
+            policyFlagsValid = true
+        )
+
+        assertFalse(decision.allowed)
+        assertEquals(AdBlockReason.ADS_DISABLED, decision.blockReason)
+    }
+
+    @Test
     fun `ads disabled blocks before any other checks`() {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.CHILD_U13,
@@ -89,6 +128,19 @@ class AdEligibilityGuardTest {
     fun `eligible teen age passes when all checks are satisfied`() {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.TEEN_13_17,
+            adsEnabled = true,
+            policyDeclarationsFinalized = true,
+            policyFlagsValid = true
+        )
+
+        assertTrue(decision.allowed)
+        assertEquals(null, decision.blockReason)
+    }
+
+    @Test
+    fun `eligible adult age passes when all checks are satisfied`() {
+        val decision = AdEligibilityGuard.evaluate(
+            ageSignal = AgeSignal.ADULT_18_PLUS,
             adsEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = true
