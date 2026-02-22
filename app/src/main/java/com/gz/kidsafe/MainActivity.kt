@@ -10,20 +10,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.gz.kidsafe.ads.AgeSignal
 import com.gz.kidsafe.ads.KidSafeBannerAdView
+import com.gz.kidsafe.analytics.MonetizationAnalyticsTracker
+import com.gz.kidsafe.analytics.MonetizationKpiDashboardCard
 import com.gz.kidsafe.policy.ParentalGate
 import com.gz.kidsafe.ui.theme.KidSafePrototypeTheme
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,10 +48,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun KidSafeHome() {
     val gateOpen = remember { mutableStateOf(false) }
+    val monetizationSnapshot by produceState(initialValue = MonetizationAnalyticsTracker.snapshot()) {
+        while (true) {
+            value = MonetizationAnalyticsTracker.snapshot()
+            delay(1_000)
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -66,6 +80,12 @@ private fun KidSafeHome() {
         Button(onClick = { gateOpen.value = true }) {
             Text("Parent Area")
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        MonetizationKpiDashboardCard(
+            modifier = Modifier.fillMaxWidth(),
+            snapshot = monetizationSnapshot
+        )
 
         if (gateOpen.value) {
             ParentalGate(
