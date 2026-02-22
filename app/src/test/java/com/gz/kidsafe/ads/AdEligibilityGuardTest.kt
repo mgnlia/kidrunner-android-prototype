@@ -21,6 +21,19 @@ class AdEligibilityGuardTest {
     }
 
     @Test
+    fun `unknown age remains blocked even when declarations are pending`() {
+        val decision = AdEligibilityGuard.evaluate(
+            ageSignal = AgeSignal.UNKNOWN,
+            adsEnabled = true,
+            policyDeclarationsFinalized = false,
+            policyFlagsValid = true
+        )
+
+        assertFalse(decision.allowed)
+        assertEquals(AdBlockReason.AGE_UNKNOWN, decision.blockReason)
+    }
+
+    @Test
     fun `ads disabled blocks before any other checks`() {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.CHILD_U13,
@@ -63,6 +76,19 @@ class AdEligibilityGuardTest {
     fun `eligible child age passes when all checks are satisfied`() {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = AgeSignal.CHILD_U13,
+            adsEnabled = true,
+            policyDeclarationsFinalized = true,
+            policyFlagsValid = true
+        )
+
+        assertTrue(decision.allowed)
+        assertEquals(null, decision.blockReason)
+    }
+
+    @Test
+    fun `eligible teen age passes when all checks are satisfied`() {
+        val decision = AdEligibilityGuard.evaluate(
+            ageSignal = AgeSignal.TEEN_13_17,
             adsEnabled = true,
             policyDeclarationsFinalized = true,
             policyFlagsValid = true
