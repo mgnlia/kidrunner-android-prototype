@@ -14,8 +14,8 @@ object KidSafeAdsManager {
         ageSignal: AgeSignal = AgeSignal.UNKNOWN,
         policyDeclarationsFinalized: Boolean = BuildConfig.POLICY_DECLARATIONS_FINALIZED,
         realAdapterEnabled: Boolean = BuildConfig.MOBILE_ADS_REAL_ADAPTER_ENABLED,
-        policyFlagsValid: Boolean = AdPolicyConfig.isStrictKidSafeConfigValid(),
-        mobileAdsAdapter: MobileAdsAdapter = MobileAdsAdapterResolver.resolve(realAdapterEnabled)
+        mobileAdsAdapter: MobileAdsAdapter = MobileAdsAdapterResolver.resolve(realAdapterEnabled),
+        policyFlagsValid: Boolean = AdPolicyConfig.isStrictKidSafeConfigValid()
     ): AdEligibilityDecision {
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = ageSignal,
