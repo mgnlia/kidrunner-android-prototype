@@ -23,6 +23,7 @@ android {
         buildConfigField("boolean", "KIDSAFE_ADS_ENABLED", "true")
         buildConfigField("boolean", "POLICY_DECLARATIONS_FINALIZED", "false")
         buildConfigField("boolean", "ADMOB_PROD_IDS_APPROVED", "false")
+        buildConfigField("boolean", "MOBILE_ADS_REAL_ADAPTER_ENABLED", "false")
         buildConfigField("String", "ADMOB_BANNER_AD_UNIT_ID", "\"\"")
     }
 
@@ -36,6 +37,7 @@ android {
         }
         debug {
             buildConfigField("boolean", "KIDSAFE_ADS_ENABLED", "true")
+            buildConfigField("boolean", "MOBILE_ADS_REAL_ADAPTER_ENABLED", "false")
         }
     }
 
