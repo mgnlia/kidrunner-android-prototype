@@ -10,17 +10,26 @@ import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.gz.kidsafe.BuildConfig
 
-private const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
-
 @Composable
-fun KidSafeBannerAdView(modifier: Modifier = Modifier) {
-    if (!BuildConfig.KIDSAFE_ADS_ENABLED) return
+fun KidSafeBannerAdView(
+    modifier: Modifier = Modifier,
+    ageSignal: AgeSignal = AgeSignal.UNKNOWN,
+    policyDeclarationsFinalized: Boolean = BuildConfig.POLICY_DECLARATIONS_FINALIZED
+) {
+    val decision = AdEligibilityGuard.evaluate(
+        ageSignal = ageSignal,
+        adsEnabled = BuildConfig.KIDSAFE_ADS_ENABLED,
+        policyDeclarationsFinalized = policyDeclarationsFinalized,
+        policyFlagsValid = AdPolicyConfig.isStrictKidSafeConfigValid()
+    )
+
+    if (!decision.allowed) return
 
     val context = LocalContext.current
     val adView = remember(context) {
         AdView(context).apply {
             setAdSize(AdSize.BANNER)
-            adUnitId = TEST_BANNER_AD_UNIT_ID
+            adUnitId = AdUnitIdResolver.bannerAdUnitId()
             loadAd(AdPolicyConfig.buildNonPersonalizedAdRequest())
         }
     }
