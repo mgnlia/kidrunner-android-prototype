@@ -3,6 +3,8 @@ package com.gz.kidsafe.ads
 import android.content.Context
 import android.util.Log
 import com.gz.kidsafe.BuildConfig
+import com.gz.kidsafe.analytics.MonetizationAnalyticsTracker
+import com.gz.kidsafe.analytics.MonetizationEventType
 import java.util.concurrent.atomic.AtomicBoolean
 
 object KidSafeAdsManager {
@@ -18,6 +20,11 @@ object KidSafeAdsManager {
         mobileAdsAdapter: MobileAdsAdapter = MobileAdsAdapterResolver.resolve(realAdapterEnabled),
         policyFlagsValid: Boolean = AdPolicyConfig.isStrictKidSafeConfigValid()
     ): AdEligibilityDecision {
+        MonetizationAnalyticsTracker.recordEvent(
+            type = MonetizationEventType.ADS_INIT_ATTEMPTED,
+            details = "ageSignal=$ageSignal"
+        )
+
         val decision = AdEligibilityGuard.evaluate(
             ageSignal = ageSignal,
             adsEnabled = adsEnabled,
@@ -27,9 +34,21 @@ object KidSafeAdsManager {
         )
 
         if (!decision.allowed) {
+            decision.blockReason?.let {
+                MonetizationAnalyticsTracker.recordEligibilityBlocked(
+                    type = MonetizationEventType.ADS_INIT_BLOCKED,
+                    reason = it,
+                    details = "ageSignal=$ageSignal"
+                )
+            }
             Log.w(TAG, "Ads initialization blocked (reason=${decision.blockReason})")
             return decision
         }
+
+        MonetizationAnalyticsTracker.recordEvent(
+            type = MonetizationEventType.ADS_INIT_ALLOWED,
+            details = "ageSignal=$ageSignal"
+        )
 
         if (initialized.compareAndSet(false, true)) {
             mobileAdsAdapter.setRequestConfiguration(AdPolicyConfig.requestConfiguration)
@@ -39,5 +58,9 @@ object KidSafeAdsManager {
         }
 
         return decision
+    }
+
+    internal fun resetForTests() {
+        initialized.set(false)
     }
 }
