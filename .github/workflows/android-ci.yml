@@ -29,56 +29,100 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install required Android SDK components
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
       - name: Assemble Debug (deterministic stderr capture)
         id: assemble
         shell: bash
         run: |
           set +e
-          gradle --version 2>&1 | tee gradle-version.log
-          gradle assembleDebug --stacktrace --console=plain 2>&1 | tee assemble.log
-          status=${PIPESTATUS[0]}
+
+          if [[ -x "./gradlew" ]]; then
+            BUILD_TOOL=(./gradlew)
+          else
+            BUILD_TOOL=(gradle)
+          fi
+
+          "${BUILD_TOOL[@]}" --version 2>&1 | tee gradle-version.log
+
+          # Some AGP paths still look for local.properties first; keep this deterministic.
+          if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+            echo "sdk.dir=${ANDROID_SDK_ROOT}" > local.properties
+          elif [[ -n "${ANDROID_HOME:-}" ]]; then
+            echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          fi
+
+          "${BUILD_TOOL[@]}" :app:assembleDebug --stacktrace --console=plain \
+            > >(tee assemble.stdout.log) \
+            2> >(tee assemble.stderr.log >&2)
+          status=$?
+
+          cat assemble.stdout.log assemble.stderr.log > assemble.log
 
           first_line=""
           offending_path=""
           line_no=""
           build_context_line=""
 
-          if [[ -s assemble.log ]]; then
-            # Kotlin/JVM compiler actionable lines.
-            first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java):[0-9]+:[0-9]+' assemble.log || true)
+          if [[ -s assemble.stderr.log ]]; then
+            # Strong file+line signals first.
+            first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' assemble.stderr.log || true)
             if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '^.+\.(kt|java):[0-9]+: error:' assemble.log || true)
+              first_line=$(grep -m1 -E '^e: .+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' assemble.stderr.log || true)
+            fi
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^[^[:space:]]+\.(kt|java|xml|gradle|kts|properties):[0-9]+(:[0-9]+)?(: error:|: )' assemble.stderr.log || true)
             fi
 
-            # Android resource linker/AAPT actionable lines.
+            # Common deterministic Android/Gradle blockers.
             if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '^[^[:space:]]+/(src/main/res|res)/[^:]+:[0-9]+:.*(AAPT: )?error:' assemble.log || true)
+              first_line=$(grep -m1 -E 'SDK location not found\.|local\.properties' assemble.stderr.log || true)
             fi
             if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '^AAPT: error:' assemble.log || true)
+              first_line=$(grep -m1 -E 'Failed to install the following Android SDK packages as some licences have not been accepted' assemble.stderr.log || true)
             fi
-
-            # Kotlin Gradle script compile failures (e.g. build.gradle.kts:line:col)
             if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E '^e: .+\.gradle\.kts:[0-9]+:[0-9]+' assemble.log || true)
+              first_line=$(grep -m1 -E '^Execution failed for task '\''(:[^'\'']+)'\''' assemble.stderr.log || true)
             fi
 
-            # Gradle script file/line declaration.
+            # Generic but still actionable stderr fallback.
             if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.log || true)
+              first_line=$(grep -m1 -E '(error|ERROR|failed|FAILED|Exception|exception)' assemble.stderr.log || true)
+            fi
+            if [[ -z "$first_line" ]]; then
+              first_line=$(awk 'NF {print; exit}' assemble.stderr.log)
+            fi
+          fi
+
+          if [[ -z "$first_line" && -s assemble.stdout.log ]]; then
+            build_context_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.stdout.log || true)
+            if [[ -n "$build_context_line" ]]; then
+              first_line="$build_context_line"
+            else
+              first_line=$(grep -m1 -E '^Execution failed for task '\''(:[^'\'']+)'\''' assemble.stdout.log || true)
             fi
 
-            # Deterministic fallback when task execution line is available.
             if [[ -z "$first_line" ]]; then
-              first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" assemble.log || true)
+              first_line=$(awk '/^\* What went wrong:/{flag=1;next} flag && NF {print; exit}' assemble.stdout.log)
             fi
-
-            # Last-resort fallback: first message under '* What went wrong:'
             if [[ -z "$first_line" ]]; then
-              first_line=$(awk '/^\* What went wrong:/{flag=1;next} flag && NF {print; exit}' assemble.log)
+              first_line=$(grep -m1 -E '(error|ERROR|failed|FAILED|Exception|exception)' assemble.stdout.log || true)
             fi
+            if [[ -z "$first_line" ]]; then
+              first_line=$(awk 'NF {print; exit}' assemble.stdout.log)
+            fi
+          fi
 
-            build_context_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.log || true)
+          if [[ -z "$build_context_line" && -s assemble.stdout.log ]]; then
+            build_context_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" assemble.stdout.log || true)
           fi
 
           if [[ -n "$first_line" ]]; then
@@ -88,18 +132,22 @@ jobs:
               rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
               echo "::error file=${rel_path},line=${line_no}::${first_line}"
               offending_path="$rel_path"
-            elif [[ "$first_line" =~ ^e:\ (.+\.gradle\.kts):([0-9]+):([0-9]+) ]]; then
+            elif [[ "$first_line" =~ ^e:\ (.+\.(kt|java|kts|gradle|xml)):([0-9]+):([0-9]+) ]]; then
               offending_path="${BASH_REMATCH[1]}"
-              line_no="${BASH_REMATCH[2]}"
+              line_no="${BASH_REMATCH[3]}"
               rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
               echo "::error file=${rel_path},line=${line_no}::${first_line}"
               offending_path="$rel_path"
-            elif [[ "$first_line" =~ ^([^:]+):([0-9]+): ]]; then
+            elif [[ "$first_line" =~ ^([^:]+\.(kt|java|xml|gradle|kts|properties)):([0-9]+): ]]; then
               offending_path="${BASH_REMATCH[1]}"
-              line_no="${BASH_REMATCH[2]}"
+              line_no="${BASH_REMATCH[3]}"
               rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
               echo "::error file=${rel_path},line=${line_no}::${first_line}"
               offending_path="$rel_path"
+            elif [[ "$first_line" =~ local\.properties|SDK\ location\ not\ found ]]; then
+              offending_path="local.properties"
+              line_no="1"
+              echo "::error file=local.properties,line=1::${first_line}"
             elif [[ "$first_line" =~ ^(Build|Settings|Script)\ file\ \'([^\']+)\'\ line:\ ([0-9]+) ]]; then
               offending_path="${BASH_REMATCH[2]}"
               line_no="${BASH_REMATCH[3]}"
@@ -113,16 +161,26 @@ jobs:
               echo "::error file=${rel_path},line=${line_no}::${first_line} (context: ${build_context_line})"
               offending_path="$rel_path"
             elif [[ "$first_line" =~ ^Execution\ failed\ for\ task\ \'(:[^\']+)\' ]]; then
-              offending_path="task${BASH_REMATCH[1]}"
-              echo "::error title=AssembleDebug task failure::${first_line}"
+              task_path="${BASH_REMATCH[1]}"
+              if [[ "$task_path" == :app:* ]]; then
+                offending_path="app/build.gradle.kts"
+                line_no="1"
+                echo "::error file=app/build.gradle.kts,line=1::${first_line}"
+              else
+                offending_path="build.gradle.kts"
+                line_no="1"
+                echo "::error file=build.gradle.kts,line=1::${first_line}"
+              fi
             else
-              offending_path="module:unknown"
-              echo "::error title=AssembleDebug deterministic failure::${first_line}"
+              offending_path=".github/workflows/android-ci.yml"
+              line_no="1"
+              echo "::error file=.github/workflows/android-ci.yml,line=1::${first_line}"
             fi
           else
-            first_line="NO_ACTIONABLE_STDERR_LINE_FOUND"
-            offending_path="module:unknown"
-            echo "::error::No actionable stderr line matched in assemble.log"
+            first_line="NO_STDERR_OR_STDOUT_OUTPUT_FOUND"
+            offending_path=".github/workflows/android-ci.yml"
+            line_no="1"
+            echo "::error file=.github/workflows/android-ci.yml,line=1::${first_line}"
           fi
 
           {
@@ -139,7 +197,11 @@ jobs:
         if: steps.assemble.outputs.exit_code == '0'
         run: |
           set -o pipefail
-          gradle testDebugUnitTest --stacktrace 2>&1 | tee unit-tests.log
+          if [[ -x "./gradlew" ]]; then
+            ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee unit-tests.log
+          else
+            gradle :app:testDebugUnitTest --stacktrace 2>&1 | tee unit-tests.log
+          fi
 
       - name: Upload CI logs
         if: always()
@@ -148,6 +210,9 @@ jobs:
           name: android-ci-logs
           if-no-files-found: warn
           path: |
+            local.properties
             gradle-version.log
+            assemble.stdout.log
+            assemble.stderr.log
             assemble.log
             unit-tests.log
