@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KidSafe Android Prototype Checkpoint</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;line-height:1.5;padding:0 16px}
+    h1,h2{margin-bottom:8px}
+    .card{border:1px solid #ddd;border-radius:8px;padding:16px;margin:12px 0}
+    code{background:#f4f4f4;padding:2px 4px;border-radius:4px}
+  </style>
+</head>
+<body>
+  <h1>KidSafe Android Prototype — 24h Checkpoint</h1>
+  <p>COPPA + Google Play Families compliance by design.</p>
+
+  <div class="card">
+    <h2>Build Status</h2>
+    <p>Scaffold complete. Build execution pending Android SDK-enabled runner.</p>
+  </div>
+
+  <div class="card">
+    <h2>Ad Integration Approach</h2>
+    <ul>
+      <li>Child-directed + under-age consent tags forced globally</li>
+      <li>Max ad content rating: <code>G</code></li>
+      <li>Non-personalized ad signal: <code>npa=1</code></li>
+      <li>Banner-only prototype path</li>
+      <li>Runtime ad kill-switch: <code>KIDSAFE_ADS_ENABLED</code></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Risk/Blockers</h2>
+    <ul>
+      <li>AD_ID merged-manifest behavior needs CI verification</li>
+      <li>No Android build runtime in current environment</li>
+      <li>Production AdMob IDs + policy/legal signoff pending</li>
+    </ul>
+  </div>
+
+  <p>Repo: <a href="https://github.com/mgnlia/kidrunner-android-prototype">mgnlia/kidrunner-android-prototype</a></p>
+</body>
+</html>
