@@ -76,6 +76,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
 
+    // Required for XML parent Theme.Material3.DayNight.NoActionBar used in values/themes.xml.
+    implementation("com.google.android.material:material:1.12.0")
+
     implementation("com.google.android.gms:play-services-ads:23.3.0")
 
     testImplementation("junit:junit:4.13.2")
