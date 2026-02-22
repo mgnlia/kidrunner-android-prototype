@@ -17,11 +17,13 @@ private const val TAG = "KidSafeBannerAdView"
 fun KidSafeBannerAdView(
     modifier: Modifier = Modifier,
     ageSignal: AgeSignal = AgeSignal.UNKNOWN,
-    policyDeclarationsFinalized: Boolean = BuildConfig.POLICY_DECLARATIONS_FINALIZED
+    policyDeclarationsFinalized: Boolean = BuildConfig.POLICY_DECLARATIONS_FINALIZED,
+    realAdapterEnabled: Boolean = BuildConfig.MOBILE_ADS_REAL_ADAPTER_ENABLED
 ) {
     val decision = AdEligibilityGuard.evaluate(
         ageSignal = ageSignal,
         adsEnabled = BuildConfig.KIDSAFE_ADS_ENABLED,
+        mobileAdsRealAdapterEnabled = realAdapterEnabled,
         policyDeclarationsFinalized = policyDeclarationsFinalized,
         policyFlagsValid = AdPolicyConfig.isStrictKidSafeConfigValid()
     )
