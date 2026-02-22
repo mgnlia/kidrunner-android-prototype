@@ -3,6 +3,7 @@ package com.gz.kidsafe.ads
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,22 +33,33 @@ fun KidSafeBannerAdView(
         policyFlagsValid = AdPolicyConfig.isStrictKidSafeConfigValid()
     )
 
-    if (!decision.allowed) {
-        decision.blockReason?.let {
-            MonetizationAnalyticsTracker.recordEligibilityBlocked(
-                type = MonetizationEventType.BANNER_ELIGIBILITY_BLOCKED,
-                reason = it,
+    LaunchedEffect(
+        ageSignal,
+        policyDeclarationsFinalized,
+        realAdapterEnabled,
+        decision.allowed,
+        decision.blockReason
+    ) {
+        if (decision.allowed) {
+            MonetizationAnalyticsTracker.recordEvent(
+                type = MonetizationEventType.BANNER_ELIGIBILITY_ALLOWED,
                 details = "ageSignal=$ageSignal"
             )
+        } else {
+            decision.blockReason?.let {
+                MonetizationAnalyticsTracker.recordEligibilityBlocked(
+                    type = MonetizationEventType.BANNER_ELIGIBILITY_BLOCKED,
+                    reason = it,
+                    details = "ageSignal=$ageSignal"
+                )
+            }
         }
+    }
+
+    if (!decision.allowed) {
         Log.w(TAG, "Banner blocked by fail-closed guard (reason=${decision.blockReason})")
         return
     }
-
-    MonetizationAnalyticsTracker.recordEvent(
-        type = MonetizationEventType.BANNER_ELIGIBILITY_ALLOWED,
-        details = "ageSignal=$ageSignal"
-    )
 
     val context = LocalContext.current
     val adView = remember(context) {
