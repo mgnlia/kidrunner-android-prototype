@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.gz.kidsafe.ads.AgeSignal
 import com.gz.kidsafe.ads.KidSafeBannerAdView
 import com.gz.kidsafe.policy.ParentalGate
 import com.gz.kidsafe.ui.theme.KidSafePrototypeTheme
@@ -56,7 +57,10 @@ private fun KidSafeHome() {
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        KidSafeBannerAdView(modifier = Modifier.fillMaxWidth())
+        KidSafeBannerAdView(
+            modifier = Modifier.fillMaxWidth(),
+            ageSignal = AgeSignal.UNKNOWN
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
         Button(onClick = { gateOpen.value = true }) {
