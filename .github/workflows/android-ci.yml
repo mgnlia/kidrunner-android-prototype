@@ -20,14 +20,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
+      - name: Set up Gradle (pin compatible version)
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+          cache-disabled: true
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Assemble Debug
-        run: gradle assembleDebug --stacktrace
+        run: gradle --version && gradle assembleDebug --stacktrace
 
       - name: Run Unit Tests
         run: gradle testDebugUnitTest --stacktrace
