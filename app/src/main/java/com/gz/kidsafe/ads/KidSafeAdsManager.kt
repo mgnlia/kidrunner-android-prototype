@@ -2,7 +2,6 @@ package com.gz.kidsafe.ads
 
 import android.content.Context
 import android.util.Log
-import com.google.android.gms.ads.MobileAds
 import com.gz.kidsafe.BuildConfig
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -10,17 +9,31 @@ object KidSafeAdsManager {
     private const val TAG = "KidSafeAdsManager"
     private val initialized = AtomicBoolean(false)
 
-    fun initialize(context: Context) {
-        if (!BuildConfig.KIDSAFE_ADS_ENABLED) {
-            Log.w(TAG, "Ads disabled by build config kill-switch")
-            return
+    fun initialize(
+        context: Context,
+        ageSignal: AgeSignal = AgeSignal.UNKNOWN,
+        policyDeclarationsFinalized: Boolean = BuildConfig.POLICY_DECLARATIONS_FINALIZED,
+        mobileAdsAdapter: MobileAdsAdapter = GoogleMobileAdsAdapter
+    ): AdEligibilityDecision {
+        val decision = AdEligibilityGuard.evaluate(
+            ageSignal = ageSignal,
+            adsEnabled = BuildConfig.KIDSAFE_ADS_ENABLED,
+            policyDeclarationsFinalized = policyDeclarationsFinalized,
+            policyFlagsValid = AdPolicyConfig.isStrictKidSafeConfigValid()
+        )
+
+        if (!decision.allowed) {
+            Log.w(TAG, "Ads initialization blocked (reason=${decision.blockReason})")
+            return decision
         }
 
         if (initialized.compareAndSet(false, true)) {
-            MobileAds.setRequestConfiguration(AdPolicyConfig.requestConfiguration)
-            MobileAds.initialize(context) {
+            mobileAdsAdapter.setRequestConfiguration(AdPolicyConfig.requestConfiguration)
+            mobileAdsAdapter.initialize(context) {
                 Log.i(TAG, "MobileAds initialized in kid-safe mode")
             }
         }
+
+        return decision
     }
 }
