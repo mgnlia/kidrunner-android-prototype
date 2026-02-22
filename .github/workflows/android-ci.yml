@@ -35,17 +35,28 @@ jobs:
         run: |
           set +e
           gradle --version 2>&1 | tee gradle-version.log
-          gradle assembleDebug --stacktrace 2>&1 | tee assemble.log
+          gradle assembleDebug --stacktrace --console=plain 2>&1 | tee assemble.log
           status=${PIPESTATUS[0]}
 
           first_line=""
           offending_path=""
 
           if [[ -s assemble.log ]]; then
+            # Kotlin/JVM compiler actionable lines.
             first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java):[0-9]+:[0-9]+' assemble.log || true)
             if [[ -z "$first_line" ]]; then
               first_line=$(grep -m1 -E '^.+\.(kt|java):[0-9]+: error:' assemble.log || true)
             fi
+
+            # Android resource linker/AAPT actionable lines.
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^[^[:space:]]+/(src/main/res|res)/[^:]+:[0-9]+:.*(AAPT: )?error:' assemble.log || true)
+            fi
+            if [[ -z "$first_line" ]]; then
+              first_line=$(grep -m1 -E '^AAPT: error:' assemble.log || true)
+            fi
+
+            # Deterministic fallback when no file-line match was produced.
             if [[ -z "$first_line" ]]; then
               first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" assemble.log || true)
             fi
@@ -58,10 +69,15 @@ jobs:
               rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
               echo "::error file=${rel_path},line=${line_no}::${first_line}"
               offending_path="$rel_path"
-            elif [[ "$first_line" =~ ^([^:]+\.(kt|java)):([0-9]+): ]]; then
+            elif [[ "$first_line" =~ ^([^:]+):([0-9]+): ]]; then
               offending_path="${BASH_REMATCH[1]}"
-              line_no="${BASH_REMATCH[3]}"
-              echo "::error file=${offending_path},line=${line_no}::${first_line}"
+              line_no="${BASH_REMATCH[2]}"
+              rel_path="${offending_path#${GITHUB_WORKSPACE}/}"
+              echo "::error file=${rel_path},line=${line_no}::${first_line}"
+              offending_path="$rel_path"
+            elif [[ "$first_line" =~ ^([^:]+\.(kt|java|xml)): ]]; then
+              offending_path="${BASH_REMATCH[1]}"
+              echo "::error file=${offending_path}::${first_line}"
             else
               offending_path="module:unknown"
               echo "::error title=AssembleDebug deterministic failure::${first_line}"
