@@ -205,15 +205,48 @@ jobs:
           classname=""
           task_path=""
 
+          # 1) Prefer compiler diagnostics that include file and line.
           if [[ -s unit-tests.stderr.log ]]; then
+            first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' unit-tests.stderr.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '^e: file:///.+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' unit-tests.stdout.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
+            first_line=$(grep -m1 -E '^e: .+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' unit-tests.stderr.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '^e: .+\.(kt|java|kts|gradle|xml):[0-9]+:[0-9]+' unit-tests.stdout.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
+            first_line=$(grep -m1 -E '^[^[:space:]]+\.(kt|java|kts|gradle|xml|properties):[0-9]+(:[0-9]+)?(: error:|: )' unit-tests.stderr.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '^[^[:space:]]+\.(kt|java|kts|gradle|xml|properties):[0-9]+(:[0-9]+)?(: error:|: )' unit-tests.stdout.log || true)
+          fi
+
+          # 2) Build script failures with explicit source location.
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" unit-tests.stdout.log || true)
+          fi
+          if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
+            first_line=$(grep -m1 -E "^(Build|Settings|Script) file '.+' line: [0-9]+" unit-tests.stderr.log || true)
+          fi
+
+          # 3) Structured unit-test failure line.
+          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
+            first_line=$(grep -m1 -E '^[[:space:]]*[[:alnum:]_.$]+[[:space:]]*>[[:space:]]+.+[[:space:]]+FAILED$' unit-tests.stdout.log || true)
+          fi
+
+          # 4) Task-level fallback only after trying source-location errors.
+          if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
             first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" unit-tests.stderr.log || true)
           fi
           if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
             first_line=$(grep -m1 -E "^Execution failed for task ':[^']+'" unit-tests.stdout.log || true)
           fi
-          if [[ -z "$first_line" && -s unit-tests.stdout.log ]]; then
-            first_line=$(grep -m1 -E '^[[:space:]]*[[:alnum:]_.$]+[[:space:]]*>[[:space:]]+.+[[:space:]]+FAILED$' unit-tests.stdout.log || true)
-          fi
+
+          # 5) Generic exception fallback.
           if [[ -z "$first_line" && -s unit-tests.stderr.log ]]; then
             first_line=$(grep -m1 -E 'AssertionError|ComparisonFailure|Caused by:|java\.lang\.[[:alnum:]_$.]+:|kotlin\.[[:alnum:]_$.]+:' unit-tests.stderr.log || true)
           fi
@@ -250,11 +283,11 @@ jobs:
               fi
             fi
 
-            frame_line=$(grep -m1 -Eo 'at [[:alnum:]_.$]+\(([^:]+\.(kt|java)):[0-9]+\)' "$first_xml" || true)
+            frame_line=$(grep -m1 -Eo 'at com\.gz\.[[:alnum:]_.$]+\(([^:]+\.(kt|java)):[0-9]+\)' "$first_xml" || true)
           fi
 
           if [[ -z "$frame_line" && -s unit-tests.log ]]; then
-            frame_line=$(grep -m1 -E '^[[:space:]]*at [[:alnum:]_.$]+\(([^:]+\.(kt|java)):[0-9]+\)' unit-tests.log || true)
+            frame_line=$(grep -m1 -E '^[[:space:]]*at com\.gz\.[[:alnum:]_.$]+\(([^:]+\.(kt|java)):[0-9]+\)' unit-tests.log || true)
           fi
 
           if [[ -n "$first_line" ]]; then
@@ -290,10 +323,9 @@ jobs:
             frame_line_no=$(printf '%s\n' "$frame_line" | sed -n 's/.*(\([^:]*\.\(kt\|java\)\):\([0-9]\+\)).*/\3/p')
             if [[ -n "$file_name" ]]; then
               rel_path=$(find app/src/test app/src/androidTest app/src/main -type f -name "$file_name" 2>/dev/null | head -n1)
-              if [[ -z "$rel_path" ]]; then
-                rel_path="$file_name"
+              if [[ -n "$rel_path" ]]; then
+                offending_path="$rel_path"
               fi
-              offending_path="$rel_path"
               if [[ -z "$line_no" ]]; then
                 line_no="$frame_line_no"
               fi
@@ -324,7 +356,10 @@ jobs:
           fi
 
           if [[ -z "$offending_path" && -n "$task_path" ]]; then
-            if [[ "$task_path" == :app:* ]]; then
+            if [[ "$task_path" == :app:compile*UnitTest* ]]; then
+              offending_path="app/src/test"
+              line_no="1"
+            elif [[ "$task_path" == :app:* ]]; then
               offending_path="app/build.gradle.kts"
               line_no="1"
             else
