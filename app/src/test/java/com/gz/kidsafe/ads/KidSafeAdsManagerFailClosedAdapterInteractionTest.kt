@@ -98,4 +98,24 @@ class KidSafeAdsManagerFailClosedAdapterInteractionTest {
         assertEquals(0, fakeAdapter.initializeCalls)
         assertEquals(0, fakeAdapter.setRequestConfigurationCalls)
     }
+
+    @Test
+    fun initialize_doesNotCallAdapterMethods_whenKillSwitchDisabled() {
+        val fakeAdapter = FakeMobileAdsAdapter()
+
+        val decision = KidSafeAdsManager.initialize(
+            context = blockedTestContext(),
+            ageSignal = AgeSignal.CHILD_U13,
+            adsEnabled = false,
+            policyDeclarationsFinalized = true,
+            realAdapterEnabled = true,
+            mobileAdsAdapter = fakeAdapter,
+            policyFlagsValid = true
+        )
+
+        assertFalse(decision.allowed)
+        assertEquals(AdBlockReason.ADS_DISABLED, decision.blockReason)
+        assertEquals(0, fakeAdapter.initializeCalls)
+        assertEquals(0, fakeAdapter.setRequestConfigurationCalls)
+    }
 }
